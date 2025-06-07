@@ -1,0 +1,55 @@
+#include <Arduino.h>
+
+#define LED_PIN 2
+#define BTN_UP  4
+#define BTN_DOWN 5
+
+volatile int blinkInterval = 500;  // Es defineix una freqüència inicial pel led
+volatile bool ledState = false;
+volatile unsigned long lastPressUp = 0;
+volatile unsigned long lastPressDown = 0;
+const int debounceTime = 200; // Es defineix el temps que servirar de filtre contra l'antirebot
+
+hw_timer_t *timer = NULL; // es declara el harware timer: timer integrat al processador que utilitzarem per generar interrupcions
+portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
+
+// Rutina d'interrupció del timer
+void IRAM_ATTR onTimer() {
+static unsigned long lastToggle = 0; // variable que ens permetrà guardar el temps en que ha tingut lloc l'últim canvi d'estat del led i aixi poder controlar els canvis de 
+unsigned long now = millis(); //funcio incorporada d'Arduino que retorna el temps en milisegons en que ha començat a executar-se el programa
+
+  // Verifica si ha pasado el intervalo para cambiar el LED
+  if (now - lastToggle >= blinkInterval) {
+      lastToggle = now;
+      ledState = !ledState;
+      digitalWrite(LED_PIN, ledState);
+  }
+
+  // Lectura de botones con debounce
+  if (digitalRead(BTN_UP) == LOW && (now - lastPressUp) > debounceTime) {
+      lastPressUp = now;
+      if (blinkInterval > 100) blinkInterval -= 50;  // Aumenta la velocidad
+  }
+
+  if (digitalRead(BTN_DOWN) == LOW && (now - lastPressDown) > debounceTime) {
+      lastPressDown = now;
+      if (blinkInterval < 2000) blinkInterval += 50; // Disminuye la velocidad
+  }
+}
+
+void setup() {
+    Serial.begin(115200); 
+    pinMode(LED_PIN, OUTPUT); // Definim els modes del pin, pin led com a una sortida
+    pinMode(BTN_UP, INPUT_PULLUP); // pin pulsador com a una entrada
+    pinMode(BTN_DOWN, INPUT_PULLUP);
+
+    // Configuración del temporizador
+    timer = timerBegin(0, 80, true);
+    timerAttachInterrupt(timer, &onTimer, true); // s'associa una interrupcio per executar-se quan el timer arribi a un valor determinat
+    timerAlarmWrite(timer, 10000, true); // Interrupción cada 10ms
+    timerAlarmEnable(timer);
+}
+
+void loop() {
+    // Nada que hacer en el loop, todo ocurre en la interrupción
+}
